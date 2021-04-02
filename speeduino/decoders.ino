@@ -1125,9 +1125,8 @@ void triggerSetEndTeeth_GM7X()
   }
 }
 
-
 /* -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-Name: Mitsubishi 4G63 / NA/NB Miata + MX-5 / 4/2
+Name: Mitsubishi  / NA/NB Miata + MX-5 / 4/2
 Desc: TBA
 Note: raw.githubusercontent.com/noisymime/speeduino/master/reference/wiki/decoders/4g63_trace.png
 Tooth #1 is defined as the next crank tooth after the crank signal is HIGH when the cam signal is falling.
@@ -1168,15 +1167,15 @@ void triggerSetup_4G63()
   else
   {
     // 70 / 110 for 4 cylinder
-    toothAngles[0] = 715; //Falling edge of tooth #1
-    toothAngles[1] = 105; //Rising edge of tooth #2
-    toothAngles[2] = 175; //Falling edge of tooth #2
-    toothAngles[3] = 285; //Rising edge of tooth #1
+    toothAngles[0] = 685; //Falling edge of tooth #1
+    toothAngles[1] = 75; //Rising edge of tooth #2
+    toothAngles[2] = 145; //Falling edge of tooth #2
+    toothAngles[3] = 255; //Rising edge of tooth #1
 
-    toothAngles[4] = 355; //Falling edge of tooth #1
-    toothAngles[5] = 465; //Rising edge of tooth #2
-    toothAngles[6] = 535; //Falling edge of tooth #2
-    toothAngles[7] = 645; //Rising edge of tooth #1
+    toothAngles[4] = 325; //Falling edge of tooth #1
+    toothAngles[5] = 435; //Rising edge of tooth #2
+    toothAngles[6] = 505; //Falling edge of tooth #2
+    toothAngles[7] = 615; //Rising edge of tooth #1
 
     triggerActualTeeth = 8;
   }
@@ -1200,6 +1199,7 @@ void triggerPri_4G63()
     toothLastToothTime = curTime;
 
     toothCurrentCount++;
+    
 
     if( (toothCurrentCount == 1) || (toothCurrentCount > triggerActualTeeth) ) //Trigger is on CHANGE, hence 4 pulses = 1 crank rev (or 6 pulses for 6 cylinders)
     {
@@ -1209,6 +1209,9 @@ void triggerPri_4G63()
        currentStatus.startRevolutions++; //Counter
     }
 
+    Serial.print("Current tooth: "); Serial.println(toothCurrentCount);
+    Serial.println(getCrankAngle_4G63());
+
     if (currentStatus.hasSync == true)
     {
       if ( BIT_CHECK(currentStatus.engine, BIT_ENGINE_CRANK) && configPage4.ignCranklock && (currentStatus.startRevolutions >= configPage4.StgCycles))
@@ -1216,6 +1219,7 @@ void triggerPri_4G63()
         if(configPage2.nCylinders == 4)
         {
           //This operates in forced wasted spark mode during cranking to align with crank teeth
+         // Serial.println("FORCED WASTE SPARK");
           if( (toothCurrentCount == 1) || (toothCurrentCount == 5) ) { endCoil1Charge(); endCoil3Charge(); }
           else if( (toothCurrentCount == 3) || (toothCurrentCount == 7) ) { endCoil2Charge(); endCoil4Charge(); }
         }
@@ -1236,7 +1240,8 @@ void triggerPri_4G63()
           if(configPage2.nCylinders == 4)
           {
             triggerToothAngle = 70;
-            triggerFilterTime = curGap; //Trigger filter is set to whatever time it took to do 70 degrees (Next trigger is 110 degrees away)
+            //triggerFilterTime = (curGap * 3) >> 3;
+           // triggerFilterTime = curGap; //Trigger filter is set to whatever time it took to do 70 degrees (Next trigger is 110 degrees away)
           }
           else if(configPage2.nCylinders == 6)
           {
@@ -1249,7 +1254,8 @@ void triggerPri_4G63()
           if(configPage2.nCylinders == 4)
           {
             triggerToothAngle = 110;
-            triggerFilterTime = (curGap * 3) >> 3; //Trigger filter is set to (110*3)/8=41.25=41 degrees (Next trigger is 70 degrees away).
+           // triggerFilterTime = curGap;
+            //triggerFilterTime = (curGap * 3) >> 3; //Trigger filter is set to (110*3)/8=41.25=41 degrees (Next trigger is 70 degrees away).
           }
           else if(configPage2.nCylinders == 6)
           {
@@ -1322,12 +1328,12 @@ void triggerPri_4G63()
         triggerFilterTime = 0;
         if( (toothCurrentCount == 1) || (toothCurrentCount == 3) || (toothCurrentCount == 5) || (toothCurrentCount == 7) || (toothCurrentCount == 9) || (toothCurrentCount == 11) )
         { 
-          if(configPage2.nCylinders == 4) { triggerToothAngle = 70; }
+          if(configPage2.nCylinders == 4) { triggerToothAngle = 110; }
           else  { triggerToothAngle = 70; }
         } 
         else 
         { 
-          if(configPage2.nCylinders == 4) { triggerToothAngle = 110; }
+          if(configPage2.nCylinders == 4) { triggerToothAngle = 70; }
           else  { triggerToothAngle = 50; }
         }
       }
@@ -1346,28 +1352,30 @@ void triggerPri_4G63()
         }
       }
     } //Has sync
-    else
+    else // has no sync
     {
       triggerSecFilterTime = 0;
       //New secondary method of determining sync
-      if(READ_PRI_TRIGGER() == true)
+      if(READ_PRI_TRIGGER() == false)
       {
-        if(READ_SEC_TRIGGER() == true) { revolutionOne = true; }
-        else { revolutionOne = false; }
+        if(READ_SEC_TRIGGER() == true) { revolutionOne = true; /*Serial.println("REV 1"); */}
+        else { revolutionOne = false;}
       }
-      else
+      else //if pri trigger is TRUE, but we are in a CHANGE primary trigger interrupt
       {
         if( (READ_SEC_TRIGGER() == false) && (revolutionOne == true) ) 
         { 
-          //Crank is low, cam is low and the crank pulse STARTED when the cam was high. 
-          if(configPage2.nCylinders == 4) { toothCurrentCount = 1; } //Means we're at 5* BTDC on a 4G63 4 cylinder
+          //Crank is HIGH, cam is low and the crank pulse STARTED when the cam was high. 
+          if(configPage2.nCylinders == 4) { toothCurrentCount = 4; } //Means we're at 5* BTDC on a 4G63 4 cylinder
+        //  Serial.println("ON TOOTH 4");
           //else if(configPage2.nCylinders == 6) { toothCurrentCount = 8; } 
         } 
         //If sequential is ever enabled, the below toothCurrentCount will need to change:
         else if( (READ_SEC_TRIGGER() == true) && (revolutionOne == true) ) 
         { 
-          //Crank is low, cam is high and the crank pulse STARTED when the cam was high. 
-          if(configPage2.nCylinders == 4) { toothCurrentCount = 5; } //Means we're at 5* BTDC on a 4G63 4 cylinder
+          //Crank is HIGH, cam is high and the crank pulse STARTED when the cam was high. 
+         // Serial.println("ON TOOTH 8");
+          if(configPage2.nCylinders == 4) { toothCurrentCount = 8; } //Means we're at 5* BTDC on a 4G63 4 cylinder
           else if(configPage2.nCylinders == 6) { toothCurrentCount = 2; currentStatus.hasSync = true; } //Means we're at 45* ATDC on 6G72 6 cylinder
         } 
       }
@@ -1409,11 +1417,12 @@ void triggerSec_4G63()
 
       triggerFilterTime = 1500; //If this is removed, can have trouble getting sync again after the engine is turned off (but ECU not reset).
       triggerSecFilterTime = triggerSecFilterTime >> 1; //Divide the secondary filter time by 2 again, making it 25%. Only needed when cranking
-      if(READ_PRI_TRIGGER() == true)
+      //if(READ_PRI_TRIGGER() == true)
+      if(READ_PRI_TRIGGER() == false)
       {
         if(configPage2.nCylinders == 4)
         { 
-          if(toothCurrentCount == 8) { currentStatus.hasSync = true; } //Is 8 for sequential, was 4
+          if(toothCurrentCount == 3) { currentStatus.hasSync = true; /*Serial.println("SYNC ON TOOTH 3");*/ } //Is 8 for sequential, was 4
         }
         else if(configPage2.nCylinders == 6) 
         { 
@@ -1425,7 +1434,7 @@ void triggerSec_4G63()
       {
         if(configPage2.nCylinders == 4)
         { 
-          if(toothCurrentCount == 5) { currentStatus.hasSync = true; } //Is 5 for sequential, was 1
+          if(toothCurrentCount == 8) { currentStatus.hasSync = true;/*Serial.println("SYNC ON TOOTH 8");*/ } //Is 5 for sequential, was 1
         }
         //Cannot gain sync for 6 cylinder here. 
       }
@@ -1440,13 +1449,14 @@ void triggerSec_4G63()
         if(READ_PRI_TRIGGER() == true)
         {
           //Whilst we're cranking and have sync, we need to watch for noise pulses.
-          if(toothCurrentCount != 8) 
+          if(toothCurrentCount != 7) 
           { 
             // This should never be true, except when there's noise
             currentStatus.hasSync = false; 
             currentStatus.syncLossCounter++;
+            //Serial.print("FAILED SYNC ON TOOTH: ");Serial.println(toothCurrentCount);
           } 
-          else { toothCurrentCount = 8; } //Why? Just why?
+          else { toothCurrentCount = 7; } //Why? Just why?
         }
       } //Has sync and 4 cylinder 
     } // Use resync or cranking
@@ -1505,9 +1515,9 @@ int getCrankAngle_4G63()
       tempToothLastToothTime = toothLastToothTime;
       lastCrankAngleCalc = micros(); //micros() is no longer interrupt safe
       interrupts();
-
+      
       crankAngle = toothAngles[(tempToothCurrentCount - 1)] + configPage4.triggerAngle; //Perform a lookup of the fixed toothAngles array to find what the angle of the last tooth passed was.
-
+      
       //Estimate the number of degrees travelled since the last tooth}
       elapsedTime = (lastCrankAngleCalc - tempToothLastToothTime);
       crankAngle += timeToAngle(elapsedTime, CRANKMATH_METHOD_INTERVAL_TOOTH);
@@ -1516,6 +1526,7 @@ int getCrankAngle_4G63()
       if (crankAngle > CRANK_ANGLE_MAX) { crankAngle -= CRANK_ANGLE_MAX; }
       if (crankAngle < 0) { crankAngle += 360; }
     }
+    Serial.println(crankAngle);
     return crankAngle;
 }
 
